@@ -1163,10 +1163,33 @@ def _gemini_tool_call_invoke_helper(
 
 
 def _get_thought_signature_from_tool(tool: dict) -> Optional[str]:
-    """Extract thought signature from tool call's provider_specific_fields"""
+    """
+    Extract thought signature from tool call.
+    
+    Checks two locations:
+    1. provider_specific_fields.thought_signature (for LiteLLM SDK clients)
+    2. Embedded in the tool call ID (for OpenAI clients)
+    """
+    # First, check provider_specific_fields (backward compatibility)
     provider_fields = tool.get("provider_specific_fields") or {}
     if isinstance(provider_fields, dict):
-        return provider_fields.get("thought_signature")
+        signature = provider_fields.get("thought_signature")
+        if signature:
+            return signature
+    
+    # Second, check if embedded in tool call ID (for OpenAI client compatibility)
+    tool_call_id = tool.get("id")
+    if tool_call_id and "__thought__" in tool_call_id:
+        import base64
+        parts = tool_call_id.split("__thought__", 1)
+        if len(parts) == 2:
+            _, encoded_sig = parts
+            try:
+                thought_signature = base64.urlsafe_b64decode(encoded_sig.encode()).decode()
+                return thought_signature
+            except Exception:
+                pass
+    
     return None
 
 
